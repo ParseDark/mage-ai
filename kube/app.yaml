@@ -33,26 +33,69 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 
 ---
-apiVersion: v1
-kind: Pod
+kind: Deployment
+apiVersion: apps/v1
 metadata:
   name: mage-server
+  labels:
+    app: mage-server
+
 spec:
-  containers:
-  - name: mage-server
-    image: mageai/mageai:latest
-    ports:
-    - containerPort: 6789
-    volumeMounts:
-    - name: mage-fs
-      mountPath: /home/src
-    env:
-      - name: KUBE_NAMESPACE
-        valueFrom:
-          fieldRef:
-            fieldPath: metadata.namespace
-  volumes:
-  - name: mage-fs
-    hostPath:
-      path: /path/to/mage_project
-  serviceAccountName: mage-user
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mage-server
+  template:
+    metadata:
+      labels:
+        app: mage-server
+    spec:
+      containers:
+      - name: mage-server
+        image: mageai/mageai:latest
+        ports:
+        - containerPort: 6789
+        volumeMounts:
+        - name: mage-fs
+          mountPath: /home/src
+        env:
+        - name: KUBE_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+      volumes:
+      - name: mage-fs
+        hostPath:
+          path: /path/to/mage_project
+      serviceAccountName: mage-user
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mage-server-svc
+
+spec:
+  ports:
+    - name: web
+      port: 80
+      targetPort: web
+
+  selector:
+    app: mage-server
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mage-server-ingress
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /mage
+        pathType: Prefix
+        backend:
+          service:
+            name: mage-server-svc
+            port:
+              name: web
